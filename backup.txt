@@ -1,0 +1,241 @@
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 3.0"
+    }
+  }
+}
+# Create a VPC
+resource "aws_vpc" "dev_vpc" {
+  cidr_block = "10.0.0.0/19"
+  instance_tenancy = "default"
+  tags = {
+  	Name = "dev_vpc"
+  }
+}
+
+# Create Subnets
+# Public Subnets
+resource "aws_subnet" "dev_pub_1a" {
+  vpc_id     = aws_vpc.dev_vpc.id
+  cidr_block = "10.0.0.0/24"
+  availability_zone = "ap-southeast-1a"
+
+  tags = {
+    Name = "dev_pub_1a"
+  }
+}
+resource "aws_subnet" "dev_pub_1b" {
+  vpc_id     = aws_vpc.dev_vpc.id
+  cidr_block = "10.0.1.0/24"
+  availability_zone = "ap-southeast-1b"
+
+  tags = {
+    Name = "dev_pub_1b"
+  }
+}
+resource "aws_subnet" "dev_pub_1c" {
+  vpc_id     = aws_vpc.dev_vpc.id
+  cidr_block = "10.0.2.0/24"
+  availability_zone = "ap-southeast-1c"
+
+  tags = {
+    Name = "dev_pub_1c"
+  }
+}
+
+# Front End Private Subnets
+resource "aws_subnet" "fe_priv_1a" {
+  vpc_id     = aws_vpc.dev_vpc.id
+  cidr_block = "10.0.3.0/24"
+  availability_zone = "ap-southeast-1a"
+
+  tags = {
+    Name = "dev_fe_priv_1a"
+  }
+}
+resource "aws_subnet" "fe_priv_1b" {
+  vpc_id     = aws_vpc.dev_vpc.id
+  cidr_block = "10.0.4.0/24"
+  availability_zone = "ap-southeast-1b"
+
+  tags = {
+    Name = "dev_fe_priv_1b"
+  }
+}
+resource "aws_subnet" "fe_priv_1c" {
+  vpc_id     = aws_vpc.dev_vpc.id
+  cidr_block = "10.0.5.0/24"
+  availability_zone = "ap-southeast-1c"
+
+  tags = {
+    Name = "dev_fe_priv_1c"
+  }
+}
+
+# Back End-A Private Subnets
+resource "aws_subnet" "be_a_priv_1a" {
+  vpc_id     = aws_vpc.dev_vpc.id
+  cidr_block = "10.0.6.0/24"
+  availability_zone = "ap-southeast-1a"
+
+  tags = {
+    Name = "dev_be_a_priv_1a"
+  }
+}
+resource "aws_subnet" "be_a_priv_1b" {
+  vpc_id     = aws_vpc.dev_vpc.id
+  cidr_block = "10.0.7.0/24"
+  availability_zone = "ap-southeast-1b"
+
+  tags = {
+    Name = "dev_be_a_priv_1b"
+  }
+}
+resource "aws_subnet" "be_a_priv_1c" {
+  vpc_id     = aws_vpc.dev_vpc.id
+  cidr_block = "10.0.8.0/24"
+  availability_zone = "ap-southeast-1c"
+
+  tags = {
+    Name = "dev_be_a_priv_1c"
+  }
+}
+
+# Back End-B Private Subnets
+resource "aws_subnet" "be_b_priv_1a" {
+  vpc_id     = aws_vpc.dev_vpc.id
+  cidr_block = "10.0.9.0/24"
+  availability_zone = "ap-southeast-1a"
+
+  tags = {
+    Name = "dev_be_b_priv_1a"
+  }
+}
+resource "aws_subnet" "be_b_priv_1b" {
+  vpc_id     = aws_vpc.dev_vpc.id
+  cidr_block = "10.0.10.0/24"
+  availability_zone = "ap-southeast-1b"
+
+  tags = {
+    Name = "dev_be_b_priv_1b"
+  }
+}
+resource "aws_subnet" "be_b_priv_1c" {
+  vpc_id     = aws_vpc.dev_vpc.id
+  cidr_block = "10.0.11.0/24"
+  availability_zone = "ap-southeast-1c"
+
+  tags = {
+    Name = "dev_be_b_priv_1c"
+  }
+}
+
+# DB Private Subnets
+resource "aws_subnet" "db_priv_1a" {
+  vpc_id     = aws_vpc.dev_vpc.id
+  cidr_block = "10.0.12.0/24"
+  availability_zone = "ap-southeast-1a"
+
+  tags = {
+    Name = "dev_db_priv_1a"
+  }
+}
+resource "aws_subnet" "db_priv_1b" {
+  vpc_id     = aws_vpc.dev_vpc.id
+  cidr_block = "10.0.13.0/24"
+  availability_zone = "ap-southeast-1b"
+
+  tags = {
+    Name = "dev_db_priv_1b"
+  }
+}
+resource "aws_subnet" "db_priv_1c" {
+  vpc_id     = aws_vpc.dev_vpc.id
+  cidr_block = "10.0.14.0/24"
+  availability_zone = "ap-southeast-1c"
+
+  tags = {
+    Name = "dev_db_priv_1c"
+  }
+}
+
+
+# Create Internet gateway and attach to vpc
+resource "aws_internet_gateway" "dev_igw" {
+  vpc_id = aws_vpc.dev_vpc.id
+
+  tags = {
+    Name = "dev_igw"
+  }
+}
+
+# Allocate EIP, Create NAT gateway and associate it
+
+resource "aws_eip" "dev_nat_gw" {
+  vpc      = true
+  tags = {
+  	Name = "dev_nat_gw"
+  }
+}
+
+resource "aws_nat_gateway" "dev_nat_gw" {
+  allocation_id = aws_eip.dev_nat_gw.id
+  subnet_id     = aws_subnet.dev_pub_1b.id
+
+  tags = {
+    Name = "dev_nat_gw"
+  }
+}
+
+# Configure Route Tables
+resource "aws_default_route_table" "dev_vpc" {
+  default_route_table_id = aws_vpc.dev_vpc.default_route_table_id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_nat_gateway.dev_nat_gw.id
+  }
+
+  tags = {
+    Name = "dev_vpc_main_rt"
+  }
+}
+
+resource "aws_route_table" "dev_vpc_pub" {
+  vpc_id = aws_vpc.dev_vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.dev_igw.id
+  }
+
+
+  tags = {
+    Name = "dev_vpc_pub_rt"
+  }
+}
+
+resource "aws_route_table_association" "dev_pub_1a" {
+  subnet_id      = aws_subnet.dev_pub_1a.id
+  route_table_id = aws_route_table.dev_vpc_pub.id
+}
+
+resource "aws_route_table_association" "dev_pub_1b" {
+  subnet_id      = aws_subnet.dev_pub_1b.id
+  route_table_id = aws_route_table.dev_vpc_pub.id
+}
+
+resource "aws_route_table_association" "dev_pub_1c" {
+  subnet_id      = aws_subnet.dev_pub_1c.id
+  route_table_id = aws_route_table.dev_vpc_pub.id
+}
+
+
+#   		description      = "Allow SSH"
+#     	from_port        = 22
+#     	to_port          = 22
+#     	protocol         = "tcp"
+#     	cidr_blocks      = ["${aws_network_interface.ssh_gw.private_ip_list}/32"]
+#   }
