@@ -59,6 +59,16 @@ resource "aws_nat_gateway" "dev_nat_gw" {
   }
 }
 
+resource "aws_eip" "ssh_gw" {
+  vpc      					= true
+  network_interface			= aws_network_interface.ssh_gw.id
+  associate_with_private_ip	= aws_network_interface.ssh_gw.private_ip
+  depends_on				= [aws_internet_gateway.dev_igw]
+  tags = {
+  	Name = "ssh_gw"
+  }
+}
+
 ###################################################
 ###			Configure VPC Route Tables			###
 ###################################################
@@ -409,8 +419,7 @@ resource "aws_security_group" "db_b_sg" {
 #######################################################
 
 resource "aws_network_interface" "ssh_gw" {
-  subnet_id       = aws_subnet.dev_subnet["pub-b"].id
-  private_ips     = ["10.0.1.10", "10.0.1.11"]
+  subnet_id       = aws_subnet.dev_subnet["pub-a"].id
   security_groups = [aws_security_group.ssh_gw_sg.id]
 }
 
@@ -420,8 +429,95 @@ resource "aws_network_interface" "front_end_svr" {
 	}  
   subnet_id       = aws_subnet.dev_subnet[each.key].id
   security_groups = [aws_security_group.web_svr_sg.id]
-  private_ips_count = 1
   tags = {
   	Name = "front_end_svr-${each.key}"
   }
+}
+
+###############################################
+### 			Create EC2 Instance			###
+###############################################
+
+resource "aws_instance" "ssh_gw" {
+  ami           = "ami-049f20cccc294bb90" 
+  instance_type = "t2.micro"
+  key_name		= "edith-tf"
+
+  network_interface {
+    network_interface_id = aws_network_interface.ssh_gw.id
+    device_index         = 0
+  }
+  tags = {
+  	Name = "ssh_gw"
+  }
+  
+}
+resource "null_resource" "ssh_gw_provisioner" {
+  triggers = {
+    public_ip = aws_instance.ssh_gw.public_ip
+  }
+
+  connection {
+    type  = "ssh"
+    host  = aws_instance.ssh_gw.public_ip
+    user  = "ec2-user"
+	private_key = file("~/Downloads/edith-tf.pem")
+    agent = true
+  }
+  provisioner "file" {
+    source      = "~/Downloads/edith-tf.pem"
+    destination = "/home/ec2-user/.ssh/edith-tf.pem"
+  } 
+
+  provisioner "remote-exec" {
+    inline = [
+      "chmod 400 /home/ec2-user/.ssh/edith-tf.pem",
+        ]
+  }
+}
+
+###########################################
+### 		Create Transit Gateway		###
+###########################################
+resource "aws_ec2_transit_gateway" "dev-tgw" {
+  description = "testing create tgw"
+  auto_accept_shared_attachments = "enable"
+  amazon_side_asn = "65101"
+  tags = {
+  	Name = "dev_tgw"
+  }
+}
+
+resource "aws_ec2_transit_gateway_vpc_attachment" "dev-tgw-to-dev-vpc" {
+#   for_each  		 = { for key, value in var.prefix: key => value
+# 		if can(regex("beb-priv", key))
+# 		}      
+#  subnet_ids         = [aws_subnet.dev_subnet[each.key].id]
+  subnet_ids         = [aws_subnet.dev_subnet["beb-priv-a"].id, aws_subnet.dev_subnet["beb-priv-b"].id, aws_subnet.dev_subnet["beb-priv-c"].id]
+  transit_gateway_id = aws_ec2_transit_gateway.dev-tgw.id
+  vpc_id             = aws_vpc.dev_vpc.id
+  tags = {
+  	Name = "dev-tgw-to-dev-vpc"
+  }
+}
+
+###########################################
+### 		Create Resource share		###
+###########################################
+resource "aws_ram_resource_share" "dev-tgw-ram" {
+  name                      = "dev-tgw-ram"
+  allow_external_principals = true
+
+  tags = {
+    Environment = "dev-tgw-ram"
+  }
+}
+resource "aws_ram_principal_association" "dev-tgw-ram" {
+  principal          = "996956017395"
+  resource_share_arn = aws_ram_resource_share.dev-tgw-ram.arn 
+}
+
+resource "aws_ram_resource_association" "dev-tgw-ram" {
+  resource_arn       = aws_ec2_transit_gateway.dev-tgw.arn
+  resource_share_arn = aws_ram_resource_share.dev-tgw-ram.arn
 }
